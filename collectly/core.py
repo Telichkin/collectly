@@ -86,18 +86,23 @@ def import_payments(payments_list):
     )
 
 
-def get_patients(min_amount=None):
+def get_patients(min_amount=None, max_amount=None):
     conn = get_db_connection()
-    query = patients.select()
+    query = patients.select().where(patients.c.deleted.is_(False))
 
-    if min_amount:
+    if min_amount or max_amount:
         total_amount = func.sum(payments.c.amount).label('total_amount')
 
-        sub_query = (select([payments.c.patient_id, total_amount])
-                 .group_by(payments.c.patient_id)
-                 .order_by('total_amount')
-                 .having(total_amount > 25))
+        sub_query = (select([payments.c.patient_id])
+                     .where(payments.c.deleted.is_(False))
+                     .group_by(payments.c.patient_id))
 
-        query = patients.join(sub_query, sub_query.c.patient_id)
+        if min_amount:
+            sub_query = sub_query.having(total_amount >= min_amount)
+
+        if max_amount:
+            sub_query = sub_query.having(total_amount <= max_amount)
+
+        query = query.where(patients.c.id.in_(sub_query))
 
     return conn.execute(query).fetchall()

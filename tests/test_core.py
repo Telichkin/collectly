@@ -211,8 +211,11 @@ def test_get_patients(app):
         ])
 
         all_patients = get_patients()
-        patients_with_amout_more_than_25 = get_patients(min_amount=25)
+        patients_with_amount_more_than_25 = get_patients(min_amount=25)
+        patients_with_amount_between_10_and_20 = get_patients(min_amount=9, max_amount=20)
 
         assert len(all_patients) == 4
-        assert len(patients_with_amout_more_than_25) == 1
-        assert patients_with_amout_more_than_25[0]['first_name'] == 'Roy'
+        assert len(patients_with_amount_more_than_25) == 1
+        assert patients_with_amount_more_than_25[0]['first_name'] == 'Roy'
+        assert len(patients_with_amount_between_10_and_20) == 2
+        assert patients_with_amount_between_10_and_20[0]['first_name'] == 'Rick'
