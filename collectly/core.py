@@ -8,7 +8,6 @@ from collectly.models import patients, payments
 def filter_external_data(external_data, transform_fn):
     data = []
     ids_to_delete = []
-    now = datetime.datetime.utcnow()
 
     for item in external_data:
         try:
