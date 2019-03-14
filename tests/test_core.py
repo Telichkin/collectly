@@ -112,9 +112,9 @@ def test_update_existed_payment(app):
         ])
 
         conn = get_db_connection()
-        res = conn.execute(payments.select().where(payments.c.external_id == '501')).fetchone()
+        payment = conn.execute(payments.select().where(payments.c.external_id == '501')).fetchone()
 
-        assert res['amount'] == 5.12
+        assert payment['amount'] == 5.12
 
 
 def test_delete_corrupted_patients(app):
@@ -156,3 +156,38 @@ def test_delete_corrupted_payments(app):
 
         assert deleted_payment['deleted'] is True
         assert total_count == 2
+
+
+def test_return_deleted_payment(app):
+    with app.app_context():
+        import_patients([
+            {'firstName': 'Pris', 'lastName': 'Stratton', 'dateOfBirth': '2093-12-20', 'externalId': '4'},
+        ])
+        import_patients([
+            {'firstName': 'Pris', 'dateOfBirth': '2093-12-20', 'externalId': '4'},
+        ])
+        import_patients([
+            {'firstName': 'Pris', 'lastName': 'Stratton', 'dateOfBirth': '2093-12-20', 'externalId': '4'},
+        ])
+
+        conn = get_db_connection()
+        patient = conn.execute(patients.select().where(patients.c.external_id == '4')).fetchone()
+
+        assert patient['deleted'] == False
+        assert patient['last_name'] == 'Stratton'
+
+
+def test_corrupted_foreign_key_should_not_prevent_importing(app):
+    with app.app_context():
+        import_patients([
+            {'firstName': 'Pris', 'lastName': 'Stratton', 'dateOfBirth': '2093-12-20', 'externalId': '4'},
+        ])
+        import_payments([
+            {'amount': 4.46, 'patientId': '1', 'externalId': '501'},
+            {'amount': 5.12, 'patientId': '2', 'externalId': '512'},
+        ])
+
+        conn = get_db_connection()
+        count = conn.execute(func.count(payments)).scalar()
+
+        assert count == 1

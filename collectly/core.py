@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import bindparam
+from sqlalchemy import bindparam, func
 
 from collectly import get_db_connection
 from collectly.models import patients, payments
@@ -37,9 +37,8 @@ def external_payment_to_internal(payment):
     }
 
 
-def import_external(data, table, transform_fn):
+def import_external(data_to_insert, external_ids_to_delete, table):
     conn = get_db_connection()
-    data_to_insert, external_ids_to_delete = filter_external_data(data, transform_fn)
 
     if data_to_insert:
         external_ids = [p['external_id'] for p in data_to_insert]
@@ -65,16 +64,23 @@ def import_external(data, table, transform_fn):
 
 
 def import_patients(patients_list):
+    data_to_insert, external_ids_to_delete = filter_external_data(patients_list, external_patient_to_internal)
+
     import_external(
-        data=patients_list,
+        data_to_insert,
+        external_ids_to_delete,
         table=patients,
-        transform_fn=external_patient_to_internal,
     )
 
 
 def import_payments(payments_list):
+    data_to_insert, external_ids_to_delete = filter_external_data(payments_list, external_payment_to_internal)
+
+    conn = get_db_connection()
+    last_patient_id = conn.execute(func.max(patients.c.id)).scalar()
+
     import_external(
-        data=payments_list,
+        [p for p in data_to_insert if p['patient_id'] <= last_patient_id],
+        external_ids_to_delete,
         table=payments,
-        transform_fn=external_payment_to_internal,
     )
