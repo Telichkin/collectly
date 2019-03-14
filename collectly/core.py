@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import bindparam, func
+from sqlalchemy import bindparam, func, select
 
 from collectly import get_db_connection
 from collectly.models import patients, payments
@@ -84,3 +84,20 @@ def import_payments(payments_list):
         external_ids_to_delete,
         table=payments,
     )
+
+
+def get_patients(min_amount=None):
+    conn = get_db_connection()
+    query = patients.select()
+
+    if min_amount:
+        total_amount = func.sum(payments.c.amount).label('total_amount')
+
+        sub_query = (select([payments.c.patient_id, total_amount])
+                 .group_by(payments.c.patient_id)
+                 .order_by('total_amount')
+                 .having(total_amount > 25))
+
+        query = patients.join(sub_query, sub_query.c.patient_id)
+
+    return conn.execute(query).fetchall()
