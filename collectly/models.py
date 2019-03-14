@@ -1,7 +1,7 @@
 import datetime
 
 from sqlalchemy import (
-    MetaData, Table, Column, Integer,
+    MetaData, Table, Column, Integer, Boolean,
     String, Float, Date, DateTime, ForeignKey
 )
 
@@ -15,6 +15,7 @@ def table(name, *columns):
         Column('id', Integer, primary_key=True),
         Column('created', DateTime, default=datetime.datetime.utcnow),
         Column('updated', DateTime),
+        Column('deleted', Boolean, default=False),
         *columns,
     )
 
