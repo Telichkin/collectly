@@ -1,6 +1,8 @@
+import os
 import tempfile
 
 db_file = tempfile.NamedTemporaryFile()
+src_root = os.path.dirname(__file__)
 
 
 class Config(object):
@@ -9,7 +11,7 @@ class Config(object):
 
 class ProdConfig(Config):
     ENV = 'prod'
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///../database.db'
+    DATABASE_URI = 'sqlite:///' + os.path.join(src_root, 'database.db')
 
     CACHE_TYPE = 'simple'
 
@@ -19,7 +21,7 @@ class DevConfig(Config):
     DEBUG = True
     DEBUG_TB_INTERCEPT_REDIRECTS = False
 
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///../database.db'
+    DATABASE_URI = 'sqlite:///' + os.path.join(src_root, 'database.db')
 
     CACHE_TYPE = 'null'
     ASSETS_DEBUG = True
@@ -30,7 +32,7 @@ class TestConfig(Config):
     DEBUG = True
     DEBUG_TB_INTERCEPT_REDIRECTS = False
 
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///' + db_file.name
-    SQLALCHEMY_ECHO = True
+    DATABASE_URI = 'sqlite:///' + db_file.name
+    DATABASE_ECHO = True
 
     CACHE_TYPE = 'null'

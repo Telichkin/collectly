@@ -1,28 +1,20 @@
 #! ../env/bin/python
 
-from flask import Flask
+from flask import Flask, g
+from sqlalchemy import create_engine
 
 from .api import api
-from .models import db
 
 
 def create_app(object_name):
-    """
-    An flask application factory, as explained here:
-    http://flask.pocoo.org/docs/patterns/appfactories/
-    Arguments:
-        object_name: the python path of the config object,
-                     e.g. appname.settings.ProdConfig
-    """
-
     app = Flask(__name__)
 
     app.config.from_object(object_name)
-
-    # initialize SQLAlchemy
-    db.init_app(app)
-
-    # register our blueprints
     app.register_blueprint(api)
+
+    with app.app_context():
+        g.engine = create_engine(
+            app.config['DATABASE_URI'],
+            echo=app.config.get('DATABASE_ECHO', False))
 
     return app
