@@ -106,3 +106,14 @@ def get_patients(min_amount=None, max_amount=None):
         query = query.where(patients.c.id.in_(sub_query))
 
     return conn.execute(query).fetchall()
+
+
+def get_payments(external_id=None):
+    conn = get_db_connection()
+    query = payments.select().where(payments.c.deleted.is_(False))
+
+    if external_id:
+        sub_query = select([patients.c.id]).where(patients.c.external_id == external_id)
+        query = query.where(payments.c.patient_id == sub_query)
+
+    return conn.execute(query).fetchall()

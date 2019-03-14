@@ -13,8 +13,6 @@ class ProdConfig(Config):
     ENV = 'prod'
     DATABASE_URI = 'sqlite:///' + os.path.join(root, 'database.db')
 
-    CACHE_TYPE = 'simple'
-
 
 class DevConfig(Config):
     ENV = 'dev'
@@ -23,7 +21,6 @@ class DevConfig(Config):
 
     DATABASE_URI = 'sqlite:///' + os.path.join(root, 'database.db')
 
-    CACHE_TYPE = 'null'
     ASSETS_DEBUG = True
 
 
@@ -34,5 +31,3 @@ class TestConfig(Config):
 
     DATABASE_URI = 'sqlite:///' + db_file.name
     DATABASE_ECHO = False
-
-    CACHE_TYPE = 'null'

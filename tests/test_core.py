@@ -5,7 +5,7 @@ from sqlalchemy import func
 
 from collectly import create_app, create_db, drop_db, get_db_connection
 from collectly.settings import TestConfig
-from collectly.core import import_patients, import_payments, get_patients
+from collectly.core import import_patients, import_payments, get_patients, get_payments
 from collectly.models import patients, payments
 
 
@@ -219,3 +219,29 @@ def test_get_patients(app):
         assert patients_with_amount_more_than_25[0]['first_name'] == 'Roy'
         assert len(patients_with_amount_between_10_and_20) == 2
         assert patients_with_amount_between_10_and_20[0]['first_name'] == 'Rick'
+
+
+def test_get_payments(app):
+    with app.app_context():
+        import_patients([
+            {'firstName': 'Rick', 'lastName': 'Deckard', 'dateOfBirth': '2094-02-01', 'externalId': '5'},
+            {'firstName': 'Pris', 'lastName': 'Stratton', 'dateOfBirth': '2093-12-20', 'externalId': '4'},
+            {'firstName': 'Roy', 'lastName': 'Batti', 'dateOfBirth': '2093-06-12', 'externalId': '8'},
+            {'firstName': 'Eldon', 'lastName': 'Tyrell', 'dateOfBirth': '2056-04-01', 'externalId': '15'},
+        ])
+        import_payments([
+            {'amount': 4.46, 'patientId': '1', 'externalId': '501'},
+            {'amount': 5.66, 'patientId': '1', 'externalId': '502'},
+            {'amount': 7.1, 'patientId': '1', 'externalId': '503'},
+            {'amount': 23.32, 'patientId': '3', 'externalId': '601'},
+            {'amount': 2.29, 'patientId': '3', 'externalId': '602'},
+            {'amount': 9.29, 'patientId': '4', 'externalId': '701'},
+        ])
+
+        all_payments = get_payments()
+        ricks_payments = get_payments(external_id='5')
+        pris_payments = get_payments(external_id='4')
+
+        assert len(all_payments) == 6
+        assert len(ricks_payments) == 3
+        assert len(pris_payments) == 0
