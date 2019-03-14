@@ -84,21 +84,21 @@ def import_patients(patients_list):
     import_external(
         data,
         external_ids_to_delete,
-        table=patients,
-    )
+        table=patients)
 
 
 def import_payments(payments_list):
+    conn = get_db_connection()
     data_to_insert, external_ids_to_delete = filter_external_data(payments_list, external_payment_to_internal)
 
-    conn = get_db_connection()
+    # parent_id is internal id with autoincrement. Because of that, I can
+    # find all existed patient_id's only by selecting max(parent_id)
     last_patient_id = conn.execute(func.max(patients.c.id)).scalar()
 
     import_external(
         [p for p in data_to_insert if p['patient_id'] <= last_patient_id],
         external_ids_to_delete,
-        table=payments,
-    )
+        table=payments)
 
 
 def get_patients(min_amount=None, max_amount=None):
