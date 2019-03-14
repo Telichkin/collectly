@@ -1,7 +1,7 @@
 #! ../env/bin/python
 
 
-from flask import Flask, g, current_app
+from flask import Flask
 
 
 from collectly.api import api

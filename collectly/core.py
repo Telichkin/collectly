@@ -12,7 +12,7 @@ def filter_external_data(external_data, transform_fn):
 
     for item in external_data:
         try:
-            data.append({**transform_fn(item), 'updated': now})
+            data.append(transform_fn(item))
         except Exception:
             if 'externalId' in item:
                 ids_to_delete.append({'external_id_to_delete': item['externalId']})
@@ -23,6 +23,7 @@ def external_patient_to_internal(patient):
     return {
         'first_name': patient['firstName'],
         'last_name': patient['lastName'],
+        'middle_name': patient.get('middleName'),
         'date_of_birth': datetime.datetime.strptime(patient['dateOfBirth'], '%Y-%m-%d').date(),
         'external_id': patient['externalId'],
         'deleted': False,
@@ -34,7 +35,17 @@ def external_payment_to_internal(payment):
         'amount': payment['amount'],
         'patient_id': int(payment['patientId']),
         'external_id': payment['externalId'],
+        'deleted': False,
     }
+
+
+def has_diff(item_for_update, item_from_db):
+    item_from_db = dict(item_from_db)
+    item_from_db.pop('id', None)
+    item_from_db.pop('created', None)
+    item_from_db.pop('updated', None)
+
+    return item_for_update != item_from_db
 
 
 def import_external(data, external_ids_to_delete, table):
@@ -46,15 +57,16 @@ def import_external(data, external_ids_to_delete, table):
                                     .select()
                                     .where(table.c.external_id.in_(external_ids))).fetchall()
 
-        existed_external_ids = [p['external_id'] for p in existed_data]
+        existed_data_by_external_id = {p['external_id']: p for p in existed_data}
 
-        data_to_insert = [p for p in data if p['external_id'] not in existed_external_ids]
+        data_to_insert = [p for p in data if p['external_id'] not in existed_data_by_external_id]
 
         if data_to_insert:
             conn.execute(table.insert(), data_to_insert)
 
-        data_to_update = [{**p, 'external_id_to_update': p['external_id']}
-                          for p in data if p['external_id'] in existed_external_ids]
+        data_to_update = [{**p, 'external_id_to_update': p['external_id']} for p in data
+                          if p['external_id'] in existed_data_by_external_id
+                          and has_diff(p, existed_data_by_external_id[p['external_id']])]
 
         if data_to_update:
             conn.execute(table

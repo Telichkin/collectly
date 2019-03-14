@@ -174,7 +174,7 @@ def test_return_deleted_payment(app, conn):
 
         patient = conn.execute(patients.select().where(patients.c.external_id == '4')).fetchone()
 
-        assert patient['deleted'] == False
+        assert patient['deleted'] is False
         assert patient['last_name'] == 'Stratton'
 
 
@@ -191,6 +191,27 @@ def test_corrupted_foreign_key_should_not_prevent_importing(app, conn):
         count = conn.execute(func.count(payments)).scalar()
 
         assert count == 1
+
+
+def test_change_updated_only_after_real_update(app, conn):
+    with app.app_context():
+        import_patients([
+            {'firstName': 'Pris', 'lastName': 'Stratton', 'dateOfBirth': '2093-12-20', 'externalId': '4'},
+        ])
+        initial_patient = conn.execute(patients.select()).fetchone()
+
+        import_patients([
+            {'firstName': 'Pris', 'lastName': 'Stratton', 'dateOfBirth': '2093-12-20', 'externalId': '4'},
+        ])
+        not_updated_patient = conn.execute(patients.select()).fetchone()
+
+        import_patients([
+            {'firstName': 'Pray', 'lastName': 'Stratton', 'dateOfBirth': '2093-12-20', 'externalId': '4'},
+        ])
+        updated_patient = conn.execute(patients.select()).fetchone()
+
+        assert initial_patient['updated'] == not_updated_patient['updated']
+        assert initial_patient['updated'] != updated_patient['updated']
 
 
 def test_get_patients(app):

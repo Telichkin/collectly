@@ -17,17 +17,12 @@ class ProdConfig(Config):
 class DevConfig(Config):
     ENV = 'dev'
     DEBUG = True
-    DEBUG_TB_INTERCEPT_REDIRECTS = False
 
     DATABASE_URI = 'sqlite:///' + os.path.join(root, 'database.db')
-
-    ASSETS_DEBUG = True
 
 
 class TestConfig(Config):
     ENV = 'test'
     DEBUG = True
-    DEBUG_TB_INTERCEPT_REDIRECTS = False
 
     DATABASE_URI = 'sqlite:///' + db_file.name
-    DATABASE_ECHO = False
