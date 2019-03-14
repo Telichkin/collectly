@@ -4,13 +4,13 @@ import os
 
 from flask_script import Manager, Server
 from flask_script.commands import ShowUrls, Clean
-from challenge import create_app
-from challenge import db
+from collectly import create_app
+from collectly import db
 
 # default to dev config because no one should use this in
 # production anyway
 env = os.environ.get('APPNAME_ENV', 'dev')
-app = create_app('challenge.settings.%sConfig' % env.capitalize())
+app = create_app('collectly.settings.%sConfig' % env.capitalize())
 
 manager = Manager(app)
 manager.add_command("server", Server())
