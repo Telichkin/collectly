@@ -97,3 +97,21 @@ def test_update_existed_patient(app):
         res = conn.execute(patients.select().where(patients.c.external_id == 4)).fetchone()
 
         assert res['date_of_birth'].day == 21
+
+
+def test_update_existed_payment(app):
+    with app.app_context():
+        import_patients([
+            {'firstName': 'Pris', 'lastName': 'Stratton', 'dateOfBirth': '2093-12-20', 'externalId': '4'},
+        ])
+        import_payments([
+            {'amount': 4.46, 'patientId': '1', 'externalId': '501'},
+        ])
+        import_payments([
+            {'amount': 5.12, 'patientId': '1', 'externalId': '501'},
+        ])
+
+        conn = get_db_connection()
+        res = conn.execute(payments.select().where(payments.c.external_id == '501')).fetchone()
+
+        assert res['amount'] == 5.12

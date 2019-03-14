@@ -63,7 +63,25 @@ def import_patients(patients_list):
 
 def import_payments(payments_list):
     conn = get_db_connection()
+    internal_payments = filter_external_data(payments_list, external_payment_to_internal)
+    external_ids = [p['external_id'] for p in internal_payments]
 
-    conn.execute(
-        payments.insert(),
-        filter_external_data(payments_list, external_payment_to_internal))
+    existed_payments = conn.execute(payments.select()
+                                    .where(payments.c.external_id.in_(external_ids))).fetchall()
+
+    conn.execute(payments.insert(), internal_payments)
+
+    existed_external_ids = [p['external_id'] for p in existed_payments]
+    updated_payments = [p for p in internal_payments if p['external_id'] in existed_external_ids]
+
+    if not updated_payments:
+        return
+
+    conn.execute(payments.update()
+                 .where(payments.c.external_id == bindparam('external_id'))
+                 .values({
+                     'amount': bindparam('amount'),
+                     'patient_id': bindparam('patient_id'),
+                     'external_id': bindparam('external_id'),
+                     'updated': bindparam('updated'),
+                 }), updated_payments)
