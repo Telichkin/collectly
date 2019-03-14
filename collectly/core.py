@@ -37,68 +37,44 @@ def external_payment_to_internal(payment):
     }
 
 
-def import_patients(patients_list):
+def import_external(data, table, transform_fn):
     conn = get_db_connection()
-    patients_to_insert, external_ids_to_delete = filter_external_data(patients_list, external_patient_to_internal)
+    data_to_insert, external_ids_to_delete = filter_external_data(data, transform_fn)
 
-    if patients_to_insert:
-        external_ids = [p['external_id'] for p in patients_to_insert]
+    if data_to_insert:
+        external_ids = [p['external_id'] for p in data_to_insert]
+        existed_data = conn.execute(table.select()
+                                    .where(table.c.external_id.in_(external_ids))).fetchall()
 
-        existed_patients = conn.execute(patients.select()
-                                        .where(patients.c.external_id.in_(external_ids))).fetchall()
+        conn.execute(table.insert(), data_to_insert)
 
-        conn.execute(patients.insert(), patients_to_insert)
+        existed_external_ids = [p['external_id'] for p in existed_data]
+        data_to_update = [{**p, 'external_id_to_update': p['external_id']} for p in data_to_insert
+                          if p['external_id'] in existed_external_ids]
 
-        existed_external_ids = [p['external_id'] for p in existed_patients]
-        patients_to_update = [p for p in patients_to_insert if p['external_id'] in existed_external_ids]
-
-        if not patients_to_update:
+        if not data_to_update:
             return
 
-        conn.execute(patients.update()
-                     .where(patients.c.external_id == bindparam('external_id'))
-                     .values({
-                         'first_name': bindparam('first_name'),
-                         'last_name': bindparam('last_name'),
-                         'date_of_birth': bindparam('date_of_birth'),
-                         'external_id': bindparam('external_id'),
-                         'updated': bindparam('updated'),
-                     }), patients_to_update)
+        conn.execute(table.update()
+                     .where(table.c.external_id == bindparam('external_id_to_update')), data_to_update)
 
     if external_ids_to_delete:
-        conn.execute(patients.update()
-                     .where(patients.c.external_id == bindparam('external_id_to_delete'))
+        conn.execute(table.update()
+                     .where(table.c.external_id == bindparam('external_id_to_delete'))
                      .values({'deleted': True}), external_ids_to_delete)
+
+
+def import_patients(patients_list):
+    import_external(
+        data=patients_list,
+        table=patients,
+        transform_fn=external_patient_to_internal,
+    )
 
 
 def import_payments(payments_list):
-    conn = get_db_connection()
-    payments_to_insert, external_ids_to_delete = filter_external_data(payments_list, external_payment_to_internal)
-
-    if payments_to_insert:
-        external_ids = [p['external_id'] for p in payments_to_insert]
-
-        existed_payments = conn.execute(payments.select()
-                                        .where(payments.c.external_id.in_(external_ids))).fetchall()
-
-        conn.execute(payments.insert(), payments_to_insert)
-
-        existed_external_ids = [p['external_id'] for p in existed_payments]
-        updated_payments = [p for p in payments_to_insert if p['external_id'] in existed_external_ids]
-
-        if not updated_payments:
-            return
-
-        conn.execute(payments.update()
-                     .where(payments.c.external_id == bindparam('external_id'))
-                     .values({
-                         'amount': bindparam('amount'),
-                         'patient_id': bindparam('patient_id'),
-                         'external_id': bindparam('external_id'),
-                         'updated': bindparam('updated'),
-                     }), updated_payments)
-
-    if external_ids_to_delete:
-        conn.execute(payments.update()
-                     .where(payments.c.external_id == bindparam('external_id_to_delete'))
-                     .values({'deleted': True}), external_ids_to_delete)
+    import_external(
+        data=payments_list,
+        table=payments,
+        transform_fn=external_payment_to_internal,
+    )
