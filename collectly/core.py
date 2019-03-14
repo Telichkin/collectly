@@ -1,20 +1,22 @@
 import datetime
 from sqlalchemy import bindparam, func, select
 
-from collectly import get_db_connection
+from collectly.db import get_db_connection
 from collectly.models import patients, payments
 
 
 def filter_external_data(external_data, transform_fn):
-    data_to_insert = []
+    data = []
     ids_to_delete = []
+    now = datetime.datetime.utcnow()
+
     for item in external_data:
         try:
-            data_to_insert.append(transform_fn(item))
+            data.append({**transform_fn(item), 'updated': now})
         except Exception:
             if 'externalId' in item:
                 ids_to_delete.append({'external_id_to_delete': item['externalId']})
-    return data_to_insert, ids_to_delete
+    return data, ids_to_delete
 
 
 def external_patient_to_internal(patient):
@@ -23,7 +25,6 @@ def external_patient_to_internal(patient):
         'last_name': patient['lastName'],
         'date_of_birth': datetime.datetime.strptime(patient['dateOfBirth'], '%Y-%m-%d').date(),
         'external_id': patient['externalId'],
-        'updated': datetime.datetime.utcnow(),
         'deleted': False,
     }
 
@@ -33,29 +34,32 @@ def external_payment_to_internal(payment):
         'amount': payment['amount'],
         'patient_id': int(payment['patientId']),
         'external_id': payment['externalId'],
-        'updated': datetime.datetime.utcnow(),
     }
 
 
-def import_external(data_to_insert, external_ids_to_delete, table):
+def import_external(data, external_ids_to_delete, table):
     conn = get_db_connection()
 
-    if data_to_insert:
-        external_ids = [p['external_id'] for p in data_to_insert]
-        existed_data = conn.execute(table.select()
+    if data:
+        external_ids = [p['external_id'] for p in data]
+        existed_data = conn.execute(table
+                                    .select()
                                     .where(table.c.external_id.in_(external_ids))).fetchall()
 
-        conn.execute(table.insert(), data_to_insert)
-
         existed_external_ids = [p['external_id'] for p in existed_data]
-        data_to_update = [{**p, 'external_id_to_update': p['external_id']} for p in data_to_insert
-                          if p['external_id'] in existed_external_ids]
 
-        if not data_to_update:
-            return
+        data_to_insert = [p for p in data if p['external_id'] not in existed_external_ids]
 
-        conn.execute(table.update()
-                     .where(table.c.external_id == bindparam('external_id_to_update')), data_to_update)
+        if data_to_insert:
+            conn.execute(table.insert(), data_to_insert)
+
+        data_to_update = [{**p, 'external_id_to_update': p['external_id']}
+                          for p in data if p['external_id'] in existed_external_ids]
+
+        if data_to_update:
+            conn.execute(table
+                         .update()
+                         .where(table.c.external_id == bindparam('external_id_to_update')), data_to_update)
 
     if external_ids_to_delete:
         conn.execute(table.update()
@@ -64,10 +68,10 @@ def import_external(data_to_insert, external_ids_to_delete, table):
 
 
 def import_patients(patients_list):
-    data_to_insert, external_ids_to_delete = filter_external_data(patients_list, external_patient_to_internal)
+    data, external_ids_to_delete = filter_external_data(patients_list, external_patient_to_internal)
 
     import_external(
-        data_to_insert,
+        data,
         external_ids_to_delete,
         table=patients,
     )
@@ -98,10 +102,10 @@ def get_patients(min_amount=None, max_amount=None):
                      .group_by(payments.c.patient_id))
 
         if min_amount:
-            sub_query = sub_query.having(total_amount >= min_amount)
+            sub_query = sub_query.having(total_amount >= int(min_amount))
 
         if max_amount:
-            sub_query = sub_query.having(total_amount <= max_amount)
+            sub_query = sub_query.having(total_amount <= int(max_amount))
 
         query = query.where(patients.c.id.in_(sub_query))
 

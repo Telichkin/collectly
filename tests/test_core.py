@@ -3,7 +3,8 @@ import datetime
 import pytest
 from sqlalchemy import func
 
-from collectly import create_app, create_db, drop_db, get_db_connection
+from collectly import create_app
+from collectly.db import create_db, drop_db, get_db_connection
 from collectly.settings import TestConfig
 from collectly.core import import_patients, import_payments, get_patients, get_payments
 from collectly.models import patients, payments
@@ -11,7 +12,6 @@ from collectly.models import patients, payments
 
 @pytest.fixture(scope='session')
 def app():
-
     return create_app(TestConfig)
 
 
@@ -23,13 +23,20 @@ def db(app):
         drop_db()
 
 
-def test_add_new_patients_into_db(app):
+@pytest.fixture()
+def conn(app):
+    with app.app_context():
+        connection = get_db_connection()
+        yield connection
+        connection.close()
+
+
+def test_add_new_patients_into_db(app, conn):
     with app.app_context():
         import_patients([
             {'firstName': 'Rick', 'lastName': 'Deckard', 'dateOfBirth': '2094-02-01', 'externalId': '5'},
         ])
 
-        conn = get_db_connection()
         res = conn.execute(patients.select().where(patients.c.external_id == 5)).fetchone()
 
         assert res['first_name'] == 'Rick'
@@ -38,7 +45,7 @@ def test_add_new_patients_into_db(app):
         assert res['date_of_birth'] == datetime.date(year=2094, month=2, day=1)
 
 
-def test_add_new_payments_into_db(app):
+def test_add_new_payments_into_db(app, conn):
     with app.app_context():
         import_patients([
             {'firstName': 'Rick', 'lastName': 'Deckard', 'dateOfBirth': '2094-02-01', 'externalId': '5'},
@@ -47,7 +54,6 @@ def test_add_new_payments_into_db(app):
             {'amount': 4.46, 'patientId': '1', 'externalId': '501'}
         ])
 
-        conn = get_db_connection()
         res = conn.execute(payments.select().where(payments.c.external_id == 501)).fetchone()
 
         assert res['amount'] == 4.46
@@ -55,20 +61,19 @@ def test_add_new_payments_into_db(app):
         assert res['external_id'] == '501'
 
 
-def test_add_new_patients_with_corrupted_data(app):
+def test_add_new_patients_with_corrupted_data(app, conn):
     with app.app_context():
         import_patients([
             {'firstName': 'Rick', 'lastName': 'Deckard', 'externalId': '5'},
             {'firstName': 'Pris', 'lastName': 'Stratton', 'dateOfBirth': '2093-12-20', 'externalId': '4'},
         ])
 
-        conn = get_db_connection()
         count = conn.execute(func.count(patients)).scalar()
 
         assert count == 1
 
 
-def test_add_new_payments_with_corrupted_data(app):
+def test_add_new_payments_with_corrupted_data(app, conn):
     with app.app_context():
         import_patients([
             {'firstName': 'Rick', 'lastName': 'Deckard', 'dateOfBirth': '2094-02-01', 'externalId': '5'},
@@ -78,13 +83,12 @@ def test_add_new_payments_with_corrupted_data(app):
             {'patientId': '1', 'externalId': '502'},
         ])
 
-        conn = get_db_connection()
         count = conn.execute(func.count(payments)).scalar()
 
         assert count == 1
 
 
-def test_update_existed_patient(app):
+def test_update_existed_patient(app, conn):
     with app.app_context():
         import_patients([
             {'firstName': 'Pris', 'lastName': 'Stratton', 'dateOfBirth': '2093-12-20', 'externalId': '4'},
@@ -93,13 +97,14 @@ def test_update_existed_patient(app):
             {'firstName': 'Pris', 'lastName': 'Stratton', 'dateOfBirth': '2093-12-21', 'externalId': '4'},
         ])
 
-        conn = get_db_connection()
         res = conn.execute(patients.select().where(patients.c.external_id == 4)).fetchone()
+        count = conn.execute(func.count(patients)).scalar()
 
         assert res['date_of_birth'].day == 21
+        assert count == 1
 
 
-def test_update_existed_payment(app):
+def test_update_existed_payment(app, conn):
     with app.app_context():
         import_patients([
             {'firstName': 'Pris', 'lastName': 'Stratton', 'dateOfBirth': '2093-12-20', 'externalId': '4'},
@@ -111,13 +116,12 @@ def test_update_existed_payment(app):
             {'amount': 5.12, 'patientId': '1', 'externalId': '501'},
         ])
 
-        conn = get_db_connection()
         payment = conn.execute(payments.select().where(payments.c.external_id == '501')).fetchone()
 
         assert payment['amount'] == 5.12
 
 
-def test_delete_corrupted_patients(app):
+def test_delete_corrupted_patients(app, conn):
     with app.app_context():
         import_patients([
             {'firstName': 'Pris', 'lastName': 'Stratton', 'dateOfBirth': '2093-12-20', 'externalId': '4'},
@@ -128,7 +132,6 @@ def test_delete_corrupted_patients(app):
             {'lastName': 'Unknown', 'dateOfBirth': '2099-12-18', 'externalId': '10'},
         ])
 
-        conn = get_db_connection()
         deleted_patient = conn.execute(patients.select().where(patients.c.external_id == '5')).fetchone()
         total_count = conn.execute(func.count(patients)).scalar()
 
@@ -136,7 +139,7 @@ def test_delete_corrupted_patients(app):
         assert total_count == 2
 
 
-def test_delete_corrupted_payments(app):
+def test_delete_corrupted_payments(app, conn):
     with app.app_context():
         import_patients([
             {'firstName': 'Pris', 'lastName': 'Stratton', 'dateOfBirth': '2093-12-20', 'externalId': '4'},
@@ -150,7 +153,6 @@ def test_delete_corrupted_payments(app):
             {'amount': 3.21, 'externalId': '123'},
         ])
 
-        conn = get_db_connection()
         deleted_payment = conn.execute(payments.select().where(payments.c.external_id == '501')).fetchone()
         total_count = conn.execute(func.count(payments)).scalar()
 
@@ -158,7 +160,7 @@ def test_delete_corrupted_payments(app):
         assert total_count == 2
 
 
-def test_return_deleted_payment(app):
+def test_return_deleted_payment(app, conn):
     with app.app_context():
         import_patients([
             {'firstName': 'Pris', 'lastName': 'Stratton', 'dateOfBirth': '2093-12-20', 'externalId': '4'},
@@ -170,14 +172,13 @@ def test_return_deleted_payment(app):
             {'firstName': 'Pris', 'lastName': 'Stratton', 'dateOfBirth': '2093-12-20', 'externalId': '4'},
         ])
 
-        conn = get_db_connection()
         patient = conn.execute(patients.select().where(patients.c.external_id == '4')).fetchone()
 
         assert patient['deleted'] == False
         assert patient['last_name'] == 'Stratton'
 
 
-def test_corrupted_foreign_key_should_not_prevent_importing(app):
+def test_corrupted_foreign_key_should_not_prevent_importing(app, conn):
     with app.app_context():
         import_patients([
             {'firstName': 'Pris', 'lastName': 'Stratton', 'dateOfBirth': '2093-12-20', 'externalId': '4'},
@@ -187,7 +188,6 @@ def test_corrupted_foreign_key_should_not_prevent_importing(app):
             {'amount': 5.12, 'patientId': '2', 'externalId': '512'},
         ])
 
-        conn = get_db_connection()
         count = conn.execute(func.count(payments)).scalar()
 
         assert count == 1
@@ -211,8 +211,8 @@ def test_get_patients(app):
         ])
 
         all_patients = get_patients()
-        patients_with_amount_more_than_25 = get_patients(min_amount=25)
-        patients_with_amount_between_10_and_20 = get_patients(min_amount=9, max_amount=20)
+        patients_with_amount_more_than_25 = get_patients(min_amount='25')
+        patients_with_amount_between_10_and_20 = get_patients(min_amount='9', max_amount='20')
 
         assert len(all_patients) == 4
         assert len(patients_with_amount_more_than_25) == 1
