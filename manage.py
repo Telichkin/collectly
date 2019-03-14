@@ -5,7 +5,7 @@ import os
 from flask_script import Manager, Server
 from flask_script.commands import ShowUrls, Clean
 
-from collectly import create_app, get_engine
+from collectly import create_app, get_engine, create_db
 from collectly.models import metadata
 
 # default to dev config because no one should use this in
@@ -24,7 +24,7 @@ def make_shell_context():
     """ Creates a python REPL with several default imports
         in the context of the app
     """
-    return dict(app=app, engine=g.engine)
+    return dict(app=app, engine=get_engine())
 
 
 @manager.command
@@ -32,7 +32,7 @@ def createdb():
     """ Creates a database with all of the tables defined in
         your SQLAlchemy models
     """
-    metadata.create_all(get_engine())
+    create_db()
 
 
 if __name__ == "__main__":
