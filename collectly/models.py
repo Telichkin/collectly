@@ -16,6 +16,7 @@ def table(name, *columns):
         Column('created', DateTime, default=datetime.datetime.utcnow),
         Column('updated', DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow),
         Column('deleted', Boolean, default=False),
+        Column('external_id', String),
         *columns,
     )
 
@@ -27,7 +28,6 @@ patients = table(
     Column('last_name', String, nullable=False),
     Column('middle_name', String),
     Column('date_of_birth', Date),
-    Column('external_id', String),
     Index('idx_patients_external_id', 'external_id'),
 )
 
@@ -37,6 +37,5 @@ payments = table(
 
     Column('amount', Float, nullable=False),
     Column('patient_id', Integer, ForeignKey('patients.id'), nullable=False),
-    Column('external_id', String),
     Index('idx_payments_external_id', 'external_id'),
 )

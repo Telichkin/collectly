@@ -1,6 +1,3 @@
-#! ../env/bin/python
-
-
 from flask import Flask
 
 

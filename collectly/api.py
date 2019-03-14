@@ -9,7 +9,8 @@ def patients_get():
     min_amount = request.args.get('payment_min')
     max_amount = request.args.get('payment_max')
 
-    # patients' json can be formatted in any other way
+    # patients' json can be formatted in any other way.
+    # It will be great to add error handling with humanize messages
     return jsonify([dict(p) for p in get_patients(min_amount=min_amount, max_amount=max_amount)])
 
 
@@ -21,7 +22,8 @@ def patients_post():
 def payments_get():
     external_id = request.args.get('external_id')
 
-    # payments' json can be formatted in an other way
+    # payments' json can be formatted in an other way.
+    # It will be great to add error handling with humanize messages
     return jsonify([dict(p) for p in get_payments(external_id=external_id)])
 
 
