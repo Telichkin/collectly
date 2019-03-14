@@ -2,11 +2,10 @@
 
 import os
 
-from flask import g
 from flask_script import Manager, Server
 from flask_script.commands import ShowUrls, Clean
 
-from collectly import create_app
+from collectly import create_app, get_engine
 from collectly.models import metadata
 
 # default to dev config because no one should use this in
@@ -33,7 +32,7 @@ def createdb():
     """ Creates a database with all of the tables defined in
         your SQLAlchemy models
     """
-    metadata.create_all(g.engine)
+    metadata.create_all(get_engine())
 
 
 if __name__ == "__main__":

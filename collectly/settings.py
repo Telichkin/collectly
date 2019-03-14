@@ -2,7 +2,7 @@ import os
 import tempfile
 
 db_file = tempfile.NamedTemporaryFile()
-src_root = os.path.dirname(__file__)
+root = os.path.dirname(os.path.dirname(__file__))
 
 
 class Config(object):
@@ -11,7 +11,7 @@ class Config(object):
 
 class ProdConfig(Config):
     ENV = 'prod'
-    DATABASE_URI = 'sqlite:///' + os.path.join(src_root, 'database.db')
+    DATABASE_URI = 'sqlite:///' + os.path.join(root, 'database.db')
 
     CACHE_TYPE = 'simple'
 
@@ -21,7 +21,7 @@ class DevConfig(Config):
     DEBUG = True
     DEBUG_TB_INTERCEPT_REDIRECTS = False
 
-    DATABASE_URI = 'sqlite:///' + os.path.join(src_root, 'database.db')
+    DATABASE_URI = 'sqlite:///' + os.path.join(root, 'database.db')
 
     CACHE_TYPE = 'null'
     ASSETS_DEBUG = True
