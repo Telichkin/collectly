@@ -33,6 +33,6 @@ class TestConfig(Config):
     DEBUG_TB_INTERCEPT_REDIRECTS = False
 
     DATABASE_URI = 'sqlite:///' + db_file.name
-    DATABASE_ECHO = True
+    DATABASE_ECHO = False
 
     CACHE_TYPE = 'null'
