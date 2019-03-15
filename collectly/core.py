@@ -118,7 +118,7 @@ def get_patients(min_amount=None, max_amount=None):
         if max_amount:
             sub_query = sub_query.having(total_amount <= int(max_amount))
 
-        query = query.where(patients.c.id.in_(sub_query))
+        query = patients.join(sub_query, patients.c.id == sub_query.c.patient_id).select()
 
     return conn.execute(query).fetchall()
 
@@ -128,7 +128,7 @@ def get_payments(external_id=None):
     query = payments.select().where(payments.c.deleted.is_(False))
 
     if external_id:
-        sub_query = select([patients.c.id]).where(patients.c.external_id == external_id)
-        query = query.where(payments.c.patient_id == sub_query)
+        sub_query = select([patients.c.id.label('p_id')]).where(patients.c.external_id == external_id)
+        query = payments.join(sub_query, payments.c.patient_id == sub_query.c.p_id).select()
 
     return conn.execute(query).fetchall()
