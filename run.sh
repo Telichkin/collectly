@@ -1,2 +1,3 @@
 #!/usr/bin/env bash
-python manage.py server
+export DATABASE_URI="sqlite:///$(pwd)/database.db"
+gunicorn collectly.api

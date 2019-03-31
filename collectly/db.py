@@ -1,36 +1,50 @@
+import datetime
 import sqlite3
-from sqlalchemy import create_engine, event, engine
-from flask import g, current_app
 
-from collectly.models import metadata
-
-
-def get_engine():
-    if 'engine' not in g:
-        g.engine = create_engine(
-            current_app.config['DATABASE_URI'],
-            echo=current_app.config.get('DATABASE_ECHO', False))
-
-    return g.engine
+from sqlalchemy import (
+    event, engine, MetaData, Table, Column, Integer,
+    Boolean, String, Float, Date, DateTime, ForeignKey, Index
+)
 
 
-def get_db_connection():
-    if 'conn' not in g:
-        g.conn = get_engine().connect()
-
-    return g.conn
+metadata = MetaData()
 
 
-def close_db_connection(_):
-    get_db_connection().close()
+def table(name, *columns):
+    return Table(
+        name, metadata,
+        Column('id', Integer, primary_key=True),
+        Column('created', DateTime, default=datetime.datetime.utcnow),
+        Column('updated', DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow),
+        Column('deleted', Boolean, default=False),
+        Column('external_id', String),
+        *columns)
 
 
-def create_db():
-    metadata.create_all(get_engine())
+patients = table(
+    'patients',
+
+    Column('first_name', String, nullable=False),
+    Column('last_name', String, nullable=False),
+    Column('middle_name', String),
+    Column('date_of_birth', Date),
+    Index('idx_patients_external_id', 'external_id'))
 
 
-def drop_db():
-    metadata.drop_all(get_engine())
+payments = table(
+    'payments',
+
+    Column('amount', Float, nullable=False),
+    Column('patient_id', Integer, ForeignKey('patients.id'), nullable=False),
+    Index('idx_payments_external_id', 'external_id'))
+
+
+def create_db(eng):
+    metadata.create_all(eng)
+
+
+def drop_db(eng):
+    metadata.drop_all(eng)
 
 
 @event.listens_for(engine.Engine, 'connect')

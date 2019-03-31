@@ -1,44 +1,97 @@
-from flask import Blueprint, jsonify, request
+import os
+import json
+import datetime
+from collections import namedtuple
 
-from collectly.core import get_patients, get_payments, import_patients, import_payments
+from sqlalchemy import create_engine
 
-api = Blueprint('api', __name__)
-
-
-def patients_get():
-    min_amount = request.args.get('payment_min')
-    max_amount = request.args.get('payment_max')
-
-    # patients' json can be formatted in any other way.
-    # It will be great to add error handling with humanize messages
-    return jsonify([dict(p) for p in get_patients(min_amount=min_amount, max_amount=max_amount)])
+from collectly.core import get_patients, import_patients, get_payments, import_payments
 
 
-def patients_post():
-    import_patients(request.get_json())
-    return jsonify({'status': 'OK'})
+Request = namedtuple('Request', ('method', 'path', 'query_str', 'body'))
 
 
-def payments_get():
-    external_id = request.args.get('external_id')
-
-    # payments' json can be formatted in an other way.
-    # It will be great to add error handling with humanize messages
-    return jsonify([dict(p) for p in get_payments(external_id=external_id)])
-
-
-def payments_post():
-    import_payments(request.get_json())
-    return jsonify({'status': 'OK'})
+def environ_to_request(environ):
+    return Request(
+        method=environ['REQUEST_METHOD'],
+        path=environ['PATH_INFO'],
+        query_str=environ['QUERY_STRING'],
+        body=environ['wsgi.input'])
 
 
-@api.route('/patients', methods=['POST', 'GET'])
-def patients():
-    method = patients_post if request.method == 'POST' else patients_get
-    return method()
+def create_endpoint(handle_request, engine):
+    def dump_datetime(obj):
+        if isinstance(obj, (datetime.date, datetime.datetime)):
+            return obj.isoformat()
+
+    def endpoint(environ, start_fn):
+        request = environ_to_request(environ)
+        connection = engine.connect()
+
+        try:
+            code, response = handle_request(request, connection)
+            response_str = json.dumps(response, default=dump_datetime).encode('utf-8')
+        finally:
+            connection.close()
+
+        start_fn(code, [
+            ('Content-Type', 'application/json; charset=utf-8'),
+            ('Content-Length', str(len(response_str))),
+        ])
+        return [response_str]
+
+    return endpoint
 
 
-@api.route('/payments', methods=['POST', 'GET'])
-def payments():
-    method = payments_post if request.method == 'POST' else payments_get
-    return method()
+def query_str_to_dict(query_str):
+    query_dict = {}
+    for pair in query_str.split('&'):
+        if pair:
+            key, value = pair.split('=')
+            query_dict[key] = value
+    return query_dict
+
+
+def body_to_object(body):
+    body_str = body.read().decode('utf-8')
+    return json.loads(body_str)
+
+
+def handler(request, conn):
+    if request.path == '/patients' and request.method == 'GET':
+        query = query_str_to_dict(request.query_str)
+        patients = get_patients(
+            conn,
+            min_amount=query.get('payment_min'),
+            max_amount=query.get('payment_max'))
+
+        return '200 OK', [dict(patient) for patient in patients]
+
+    if request.path == '/patients' and request.method == 'POST':
+        import_patients(conn, body_to_object(request.body))
+
+        return '200 OK', {'status': 'OK'}
+
+    if request.path == '/payments' and request.method == 'GET':
+        query = query_str_to_dict(request.query_str)
+        payments = get_payments(
+            conn,
+            external_id=query.get('external_id'))
+
+        return '200 OK', [dict(payment) for payment in payments]
+
+    if request.path == '/payments' and request.method == 'POST':
+        import_payments(conn, body_to_object(request.body))
+
+        return '200 OK', {'status': 'OK'}
+
+    return '404 Not Found', {'status': 'error', 'code': '404'}
+
+
+def create_app():
+    engine = create_engine(os.environ.get('DATABASE_URI'))
+
+    return create_endpoint(handler, engine)
+
+
+application = create_app()

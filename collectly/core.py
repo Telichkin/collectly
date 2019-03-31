@@ -1,8 +1,7 @@
 import datetime
 from sqlalchemy import bindparam, func, select
 
-from collectly.db import get_db_connection
-from collectly.models import patients, payments
+from collectly.db import patients, payments
 
 
 def filter_external_data(external_data, transform_fn):
@@ -47,9 +46,7 @@ def has_diff(item_for_update, item_from_db):
     return item_for_update != item_from_db
 
 
-def import_external(data, external_ids_to_delete, table):
-    conn = get_db_connection()
-
+def import_external(conn, data, external_ids_to_delete, table):
     if data:
         external_ids = [p['external_id'] for p in data]
         existed_data = conn.execute(table
@@ -78,31 +75,31 @@ def import_external(data, external_ids_to_delete, table):
                      .values({'deleted': True}), external_ids_to_delete)
 
 
-def import_patients(patients_list):
+def import_patients(conn, patients_list):
     data, external_ids_to_delete = filter_external_data(patients_list, external_patient_to_internal)
 
     import_external(
+        conn,
         data,
         external_ids_to_delete,
         table=patients)
 
 
-def import_payments(payments_list):
-    conn = get_db_connection()
-    data_to_insert, external_ids_to_delete = filter_external_data(payments_list, external_payment_to_internal)
+def import_payments(conn, payments_list):
+    data, external_ids_to_delete = filter_external_data(payments_list, external_payment_to_internal)
 
     # parent_id is internal id with autoincrement. Because of that, I can
     # find all existed patient_id's only by selecting max(parent_id)
     last_patient_id = conn.execute(func.max(patients.c.id)).scalar()
 
     import_external(
-        [p for p in data_to_insert if p['patient_id'] <= last_patient_id],
+        conn,
+        [p for p in data if p['patient_id'] <= last_patient_id],
         external_ids_to_delete,
         table=payments)
 
 
-def get_patients(min_amount=None, max_amount=None):
-    conn = get_db_connection()
+def get_patients(conn, min_amount=None, max_amount=None):
     query = patients.select().where(patients.c.deleted.is_(False))
 
     if min_amount or max_amount:
@@ -113,18 +110,17 @@ def get_patients(min_amount=None, max_amount=None):
                      .group_by(payments.c.patient_id))
 
         if min_amount:
-            sub_query = sub_query.having(total_amount >= int(min_amount))
+            sub_query = sub_query.having(total_amount >= float(min_amount))
 
         if max_amount:
-            sub_query = sub_query.having(total_amount <= int(max_amount))
+            sub_query = sub_query.having(total_amount <= float(max_amount))
 
         query = patients.join(sub_query, patients.c.id == sub_query.c.patient_id).select()
 
     return conn.execute(query).fetchall()
 
 
-def get_payments(external_id=None):
-    conn = get_db_connection()
+def get_payments(conn, external_id=None):
     query = payments.select().where(payments.c.deleted.is_(False))
 
     if external_id:
