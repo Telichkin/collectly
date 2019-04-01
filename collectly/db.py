@@ -39,14 +39,6 @@ payments = table(
     Index('idx_payments_external_id', 'external_id'))
 
 
-def create_db(eng):
-    metadata.create_all(eng)
-
-
-def drop_db(eng):
-    metadata.drop_all(eng)
-
-
 @event.listens_for(engine.Engine, 'connect')
 def set_sqlite_pragma(dbapi_connection, _):
     if isinstance(dbapi_connection, sqlite3.Connection):

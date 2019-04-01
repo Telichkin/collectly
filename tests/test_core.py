@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import create_engine, func
 
 from collectly.core import import_patients, import_payments, get_patients, get_payments
-from collectly.db import create_db, drop_db, patients, payments
+from collectly.db import metadata, patients, payments
 
 
 @pytest.fixture(scope='session')
@@ -16,9 +16,9 @@ def engine():
 
 @pytest.fixture(scope='function', autouse=True)
 def db(engine):
-    create_db(engine)
+    metadata.create_all(engine)
     yield
-    drop_db(engine)
+    metadata.drop_all(engine)
 
 
 @pytest.fixture()
@@ -147,6 +147,20 @@ def test_delete_corrupted_payments(conn):
 
     assert deleted_payment['deleted'] is True
     assert total_count == 2
+
+
+def test_delete_patients_which_exist_in_db_but_not_exist_in_data(conn):
+    import_patients(conn, [
+        {'firstName': 'Pris', 'lastName': 'Stratton', 'dateOfBirth': '2093-12-20', 'externalId': '4'},
+        {'firstName': 'Rick', 'lastName': 'Deckard', 'dateOfBirth': '2094-02-01', 'externalId': '5'},
+    ])
+    import_patients(conn, [
+        {'firstName': 'Rick', 'lastName': 'Deckard', 'dateOfBirth': '2094-02-01', 'externalId': '5'},
+    ])
+
+    pris = conn.execute(patients.select().where(patients.c.external_id == '4')).fetchone()
+
+    assert pris['deleted'] is True
 
 
 def test_return_deleted_payment(conn):

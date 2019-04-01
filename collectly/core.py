@@ -1,20 +1,19 @@
 import datetime
-from sqlalchemy import bindparam, func, select
+from sqlalchemy import bindparam, func, select, not_
 
 from collectly.db import patients, payments
 
 
 def filter_external_data(external_data, transform_fn):
     data = []
-    ids_to_delete = []
 
     for item in external_data:
         try:
             data.append(transform_fn(item))
-        except Exception:
-            if 'externalId' in item:
-                ids_to_delete.append({'external_id_to_delete': item['externalId']})
-    return data, ids_to_delete
+        except:
+            pass
+
+    return data
 
 
 def external_patient_to_internal(patient):
@@ -46,57 +45,50 @@ def has_diff(item_for_update, item_from_db):
     return item_for_update != item_from_db
 
 
-def import_external(conn, data, external_ids_to_delete, table):
-    if data:
-        external_ids = [p['external_id'] for p in data]
-        existed_data = conn.execute(table
-                                    .select()
-                                    .where(table.c.external_id.in_(external_ids))).fetchall()
+def import_external(conn, data, table):
+    imported_ids = [p['external_id'] for p in data]
 
-        existed_data_by_external_id = {p['external_id']: p for p in existed_data}
+    conn.execute(table
+                 .update()
+                 .where(not_(table.c.external_id.in_(imported_ids)))
+                 .values({'deleted': True}))
 
-        data_to_insert = [p for p in data if p['external_id'] not in existed_data_by_external_id]
+    existed_data = conn.execute(table
+                                .select()
+                                .where(table.c.external_id.in_(imported_ids))).fetchall()
 
-        if data_to_insert:
-            conn.execute(table.insert(), data_to_insert)
+    existed_data_by_external_id = {p['external_id']: p for p in existed_data}
 
-        data_to_update = [{**p, 'external_id_to_update': p['external_id']} for p in data
-                          if p['external_id'] in existed_data_by_external_id
-                          and has_diff(p, existed_data_by_external_id[p['external_id']])]
+    data_to_insert = [p for p in data if p['external_id'] not in existed_data_by_external_id]
 
-        if data_to_update:
-            conn.execute(table
-                         .update()
-                         .where(table.c.external_id == bindparam('external_id_to_update')), data_to_update)
+    if data_to_insert:
+        conn.execute(table.insert(), data_to_insert)
 
-    if external_ids_to_delete:
-        conn.execute(table.update()
-                     .where(table.c.external_id == bindparam('external_id_to_delete'))
-                     .values({'deleted': True}), external_ids_to_delete)
+    data_to_update = [{**p, 'external_id_to_update': p['external_id']} for p in data
+                      if p['external_id'] in existed_data_by_external_id
+                      and has_diff(p, existed_data_by_external_id[p['external_id']])]
+
+    if data_to_update:
+        conn.execute(table
+                     .update()
+                     .where(table.c.external_id == bindparam('external_id_to_update')), data_to_update)
 
 
 def import_patients(conn, patients_list):
-    data, external_ids_to_delete = filter_external_data(patients_list, external_patient_to_internal)
+    data = filter_external_data(patients_list, external_patient_to_internal)
 
-    import_external(
-        conn,
-        data,
-        external_ids_to_delete,
-        table=patients)
+    import_external(conn, data, patients)
 
 
 def import_payments(conn, payments_list):
-    data, external_ids_to_delete = filter_external_data(payments_list, external_payment_to_internal)
+    data = filter_external_data(payments_list, external_payment_to_internal)
 
     # parent_id is internal id with autoincrement. Because of that, I can
     # find all existed patient_id's only by selecting max(parent_id)
     last_patient_id = conn.execute(func.max(patients.c.id)).scalar()
+    data = [p for p in data if p['patient_id'] <= last_patient_id]
 
-    import_external(
-        conn,
-        [p for p in data if p['patient_id'] <= last_patient_id],
-        external_ids_to_delete,
-        table=payments)
+    import_external(conn, data, payments)
 
 
 def get_patients(conn, min_amount=None, max_amount=None):
